@@ -7,12 +7,6 @@ pipeline {
             }
         }
         
-        stage("Checkout"){
-            steps {
-                checkout scm
-            }
-        }
-        
         stage("Build"){
             steps {
                 sh "mvn -f . -Dprofile=$ENV package"
