@@ -45,7 +45,7 @@
         ```python
         <properties>
         	...
-        	<profile>${profile:test}</profile>
+        	<profile>${profile:dev}</profile>
         </properties>
         ```
         
@@ -55,6 +55,13 @@
             ```python
             spring.profiles.active=@profile@
             app.title=Hello world
+            server.port=8084
+            ```
+        
+        - application-dev.properties
+            
+            ```python
+            app.title=Dev environment
             server.port=8085
             ```
             
