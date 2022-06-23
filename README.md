@@ -101,27 +101,133 @@
         
         ![Untitled](https://i.imgur.com/r7mJy3i.png)
 
-2. Jenkinsfile
-    ```groovy
-    pipeline {
-        agent any 
-        stages {
-            stage("Checkout"){
-                steps {
-                    checkout([$class: 'GitSCM', 
-                        branches: [[name: '*/main']],
-                        extensions: [[$class: 'CleanCheckout']], // clean workspace after checkout
-                        userRemoteConfigs: [[url: 'https://github.com/tranvannhan1911/java-multiple-environment.git']]])
-                }
+# Jenkins Pipeline And Nexus
+
+1. Nội dung
+    1. Tạo `snapshots` repository
+        
+        ![Untitled](note_images/Untitled.png)
+        
+        - Được sử dụng để chứa các artifacts được deploy với version tag `-SNAPSHOT` trong file `pom.xml`
+    2. Tạo `releases` repository
+        
+        ![Untitled](note_images/Untitled%201.png)
+        
+        - Được sử dụng để chứa các artifacts được deploy khi không có version tag `-SNAPSHOT` thường được thêm version tag `-RELEASE` trong file `pom.xml`
+        - `deployment policy: disable redeploy`: Để ngăn chặn việc deploy lại 1 artifact.
+    3. Tạo `example-dev` role
+        
+        ![Untitled](note_images/Untitled%202.png)
+        
+    4. Tạo `jenkins-user` user
+        
+        ![Untitled](note_images/Untitled%203.png)
+        
+    5. Cài các plugin `Nexus Artifact Uploader` và `Pipeline Utility Steps` trên Jenkins
+    6. Tạo `nexus` credential
+        
+        ![Untitled](note_images/Untitled%204.png)
+        
+        - Với username và password đã tạo phía trên
+    7. Add Maven tool
+        - *`Dashboard` > `Manage Jenkins` > `Global Tool Configuration` > `Maven`*
+        
+        ![Untitled](note_images/Untitled%205.png)
+        
+    8. Jenkinsfile
+        
+        ```bash
+        pipeline {
+            agent any 
+            
+            tools {
+                maven "Maven"
             }
             
-            stage("Build"){
-                steps {
-                    sh "mvn -f . -Dprofile=$ENV package"
+            environment {
+                GIT_REPOSITORY = "https://github.com/tranvannhan1911/java-multiple-environment.git"
+                NEXUS_VERSION = "nexus3"
+                NEXUS_PROTOCOL = "https"
+                NEXUS_URL = "nexus.tranvannhan1911.tk"
+                NEXUS_CREDENTIAL_ID = "nexus"
+                NEXUS_REPOSITORY_RELEASE = "example-maven-releases"
+                NEXUS_REPOSITORY_SNAPSHOT = "example-maven-snapshots"
+            }
+            
+            stages {
+                stage("Checkout"){
+                    steps {
+                        checkout([$class: 'GitSCM', 
+                            branches: [[name: '*/main']],
+                            extensions: [[$class: 'CleanCheckout']], // clean workspace after checkout
+                            userRemoteConfigs: [[url: GIT_REPOSITORY]]])
+                    }
+                }
+                
+                stage("Build"){
+                    steps {
+                        sh "mvn -f . -Dprofile=$ENV package"
+                    }
+                }
+                
+                stage("Publish to Nexus"){
+                    steps {
+                        script {
+                            pom = readMavenPom file: "pom.xml";
+                            filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
+                            version = pom.version;
+                            versionType = version.substring(version.indexOf('-')+1, version.length());
+                            artifactPath = filesByGlob[0].path;
+                            
+                            echo "${filesByGlob[0].name} ${artifactPath} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified} ${versionType}"
+                            
+                            artifactExists = fileExists artifactPath;
+                            if(artifactExists) {
+                                if(versionType == "SNAPSHOT")
+                                    nexusRepository = NEXUS_REPOSITORY_SNAPSHOT;
+                                else
+                                    nexusRepository = NEXUS_REPOSITORY_RELEASE;
+                                
+                                echo "File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version}";
+                                result = nexusArtifactUploader(
+                                    nexusVersion: NEXUS_VERSION,
+                                    protocol: NEXUS_PROTOCOL,
+                                    nexusUrl: NEXUS_URL,
+                                    groupId: pom.groupId,
+                                    version: pom.version,
+                                    repository: nexusRepository,
+                                    credentialsId: NEXUS_CREDENTIAL_ID,
+                                    artifacts: [
+                                        [artifactId: pom.artifactId,
+                                        classifier: '',
+                                        file: artifactPath,
+                                        type: pom.packaging],
+                                        [artifactId: pom.artifactId,
+                                        classifier: '',
+                                        file: "pom.xml",
+                                        type: "pom"]
+                                    ]
+                                );
+                                
+                                if(!result){
+                                    error "Upload artifact ${filesByGlob[0].name} fail!";
+                                }
+                            } else {
+                                error "File: ${artifactPath}, could not be found";
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
-    ```
-3. Tài liệu tham khảo
+        ```
+        
+    9. Kết quả
+        
+        ![Untitled](note_images/Untitled%206.png)
+        
+2. Tài liệu tham khảo
+    1. [https://dzone.com/articles/publishing-artifacts-to-sonatype-nexus-using-jenki](https://dzone.com/articles/publishing-artifacts-to-sonatype-nexus-using-jenki)
+    2. [https://www.youtube.com/watch?v=ftTjxztcT14](https://www.youtube.com/watch?v=ftTjxztcT14)
+    3. [https://stackoverflow.com/questions/38276341/jenkins-ci-pipeline-scripts-not-permitted-to-use-method-groovy-lang-groovyobject](https://stackoverflow.com/questions/38276341/jenkins-ci-pipeline-scripts-not-permitted-to-use-method-groovy-lang-groovyobject)
     
