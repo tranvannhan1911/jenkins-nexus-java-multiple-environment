@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.example.multiple_environment</groupId>
 	<artifactId>multiple-environment</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.1</version>
 	<name>multiple-environment</name>
 	<description>Demo project for Spring Boot</description>
 	<properties>
